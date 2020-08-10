@@ -45,7 +45,7 @@ class AuthenticationServiceTest {
 
     @BeforeAll
     public static void init(){
-        UserData userData = new UserData("João", "joaoamaral@gmail.com", "password123");
+        UserData userData = new UserData(1,"João", "joaoamaral@gmail.com", "password123");
 
         String name = userData.getName();
         String email = userData.getEmail();
@@ -60,6 +60,7 @@ class AuthenticationServiceTest {
         }
 
         user = new User(name, email, passwordHash, salt);
+        user.setId(userData.getId());
 
     }
 
@@ -107,13 +108,16 @@ class AuthenticationServiceTest {
     @Test
     public void testUpdateUser(){
 
-        String credentials = "{ \"name\": \"João\", \"email\":\"joaoamaral@gmail.com\", \"password\":\"password123\" }";
+        BDDMockito.when(userRepository.findById(user.getId())).thenReturn(Mono.just(user));
+
+        String update_all = "{ \"id\": 1, \"name\": \"João\", \"email\":\"jjjj@gmail.com\", \"password\":\"password123\" }";
+        String update_email = "{ \"id\": 1, \"email\":\"jjjj@gmail.com\" }";
 
         webTestClient.put()
                 .uri("/user/update")
                 .accept(MediaType.APPLICATION_JSON)
                 .header("Content-Type", "application/json;charset=UTF-8")
-                .body(BodyInserters.fromValue(credentials))
+                .body(BodyInserters.fromValue(update_email))
                 .exchange()
                 .expectStatus()
                 .isOk();
@@ -132,8 +136,14 @@ class AuthenticationServiceTest {
 
     @Test
     public void testDeleteUser(){
+
+        BDDMockito.when(userRepository.deleteById(user.getId())).thenReturn(Mono.empty());
+
         webTestClient.delete()
-                .uri("/user/delete?id=1")
+                .uri(uriBuilder -> uriBuilder
+                        .path("/user/delete")
+                        .queryParam("id", "1")
+                        .build())
                 .exchange()
                 .expectStatus()
                 .isOk();

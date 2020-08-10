@@ -12,6 +12,8 @@ import org.springframework.web.reactive.function.server.ServerResponse;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
+import java.util.Optional;
+
 import static org.springframework.web.reactive.function.BodyInserters.fromObject;
 import static org.springframework.web.reactive.function.BodyInserters.fromValue;
 
@@ -30,7 +32,8 @@ public class AuthenticationHandler {
         return userData.flatMap( data -> ServerResponse
                 .ok()
                 .contentType(MediaType.APPLICATION_JSON)
-                .body(authenticationService.authenticateUser(data), User.class));
+                .body(authenticationService.authenticateUser(data), User.class))
+                .switchIfEmpty(ServerResponse.notFound().build());
     }
 
     public Mono<ServerResponse> createUser(ServerRequest serverRequest){
@@ -45,7 +48,7 @@ public class AuthenticationHandler {
     }
 
     public Mono<ServerResponse> updateUser(ServerRequest serverRequest){
-        log.info("Handler::deleteUser");
+        log.info("Handler::updateUser");
         return authenticationService.updateUser(serverRequest.bodyToMono(UserData.class))
                 .flatMap( data -> ServerResponse
                         .ok()
@@ -56,15 +59,29 @@ public class AuthenticationHandler {
 
     public Mono<ServerResponse> getAllUsers(ServerRequest serverRequest){
         log.info("Handler::getAllUsers");
-        // TODO
-        return Mono.empty();
+
+        return ServerResponse
+                .ok()
+                .contentType(MediaType.APPLICATION_JSON)
+                .body(authenticationService.getAllUsers(), User.class);
     }
 
     public Mono<ServerResponse> deleteUser(ServerRequest serverRequest){
         log.info("Handler::deleteUser");
         log.info("Query params: " + serverRequest.queryParams());
-        // TODO
-        return Mono.empty();
+
+        Optional<String> id = serverRequest.queryParam("id");
+
+        if(id.isEmpty()){
+            return ServerResponse.badRequest().body("Invalid request", String.class);
+        }
+
+        Mono<Void> deletedUser = authenticationService.deleteUser(Integer.parseInt(id.get()));
+
+        return ServerResponse
+                .ok()
+                .contentType(MediaType.APPLICATION_JSON)
+                .body(deletedUser, Void.class);
     }
 
 }

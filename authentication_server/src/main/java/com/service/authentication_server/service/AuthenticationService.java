@@ -1,10 +1,8 @@
 package com.service.authentication_server.service;
 
 import com.service.authentication_server.exception.GenericException.GenericException;
-import com.service.authentication_server.exception.GenericException.GenericExceptionEntityType;
 import com.service.authentication_server.model.User;
 import com.service.authentication_server.model.UserData;
-//import com.service.authentication_server.repository.UserRepository;
 import com.service.authentication_server.model.UserState;
 import com.service.authentication_server.repository.UserRepository;
 import lombok.extern.log4j.Log4j2;
@@ -17,6 +15,7 @@ import reactor.core.scheduler.Schedulers;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Optional;
 
 import static com.service.authentication_server.exception.GenericException.GenericExceptionEntityType.REPOSITORY;
 import static com.service.authentication_server.exception.GenericException.GenericExceptionEntityType.USER;
@@ -39,7 +38,7 @@ public class AuthenticationService {
         String email = userData.getEmail();
         String password = userData.getPassword();
 
-        // validate received email
+        // validate received email syntax
         if(!regexValidateString(email,VALID_EMAIL_ADDRESS_REGEX)){
             log.info("Provided email <" + email + "> composition is invalid");
             return Mono.error(GenericException.throwException(USER,INVALID_EMAIL_EXCEPTION,"Email format is invalid"));
@@ -108,108 +107,97 @@ public class AuthenticationService {
                 .switchIfEmpty(Mono.error(GenericException.throwException(REPOSITORY, REPOSITORY_STORE_EXCEPTION,  "Failed while storing newly created user into database")));
     }
 
-    public Mono<String> updateUser(Mono<UserData> userData){
+    public Mono<Object> updateUser(Mono<UserData> userData){
         log.info("AuthenticationService::updateUser");
 
-        // TODO get this to work!
+        // TODO error handling
         return userData.flatMap( data -> {
-
+            System.out.println(data);
             return userRepository.findById(data.getId())
                     .flatMap( user1 -> {
-                        Map<String, String> m = checkNewUserData(data);
-                        m.forEach(((k,v) -> {
-                            switch (k){
-                                case "email":
-                                    user1.setEmail(v);
-                                    break;
-                                case "name" :
-                                    user1.setName(v);
-                                    break;
-                                case "password" :
-                                    byte[] passwordHash = new byte[0];
-                                    try {
-                                        passwordHash = generatePBKDF2(v, user1.getCryptoSalt());
-                                    } catch (GenericException e) {
-                                        if(log.isDebugEnabled())
-                                            e.printStackTrace();
-                                        // throw  Mono.error(e); TODO: look for a way to propagate the error
-                                    }
-
-                                    user1.setPassword(passwordHash);
-                                    break;
+                        System.out.println(user1);
+                        Optional<Map<String, String>> optionalMap = validateAndCheckNewData(data);
+                        if(optionalMap.isEmpty()){
+                            return Mono.just("No fields to update");
+                        }else {
+                            Map<String,String> m = optionalMap.get();
+                            if (m.containsKey("email")) user1.setEmail(m.get("email"));
+                            if (m.containsKey("name")) user1.setName(m.get("name"));
+                            if (m.containsKey("password")) {
+                                byte[] passwordHash = new byte[0];
+                                try {
+                                    passwordHash = generatePBKDF2(m.get("password"), user1.getCryptoSalt());
+                                } catch (GenericException e) {
+                                    if (log.isDebugEnabled())
+                                        e.printStackTrace();
+                                    return Mono.error(e);
+                                }
+                                user1.setPassword(passwordHash);
                             }
-                        }));
-                        return userRepository.save(user1);
-                    }).map(User::toStringSimple);
+                            return userRepository.save(user1);
+                        }
+                    }).map(updatedUser -> {
+                        System.out.println(updatedUser.toString());
+                        return updatedUser.toString();
+                    });
         });
     }
 
     // check and validate user data
-    public Map<String,String> checkNewUserData(UserData userData){
+    public Optional<Map<String,String>> validateAndCheckNewData(UserData userData){
         Map<String, String> map = new HashMap<>();
 
         String newName = userData.getName();
         String newEmail = userData.getEmail();
         String newPassword = userData.getPassword();
 
-        // check if new name is present
+        // check if name to be updated
         if(newName != null && !newName.isEmpty()) {
             // check if name is an appropriate string
             if (!regexValidateString(newName, VALID_NAME_REGEX)) {
                 log.warn("Name field " + newName + " failed regex validation");
-                return null; // TODO fix return on error
+                return Optional.empty(); // TODO error handling
                 //return Mono.error(GenericException.throwException(USER, INVALID_NAME_EXCEPTION, "Name format is invalid"));
             }
             log.info("Name to be updated");
             map.put("name", newName);
 
         // check if email to be updated
-        }else if(newEmail != null && !newEmail.isEmpty()) {
+        }if(newEmail != null && !newEmail.isEmpty()) {
             // check if email is an appropriate string
             if (!regexValidateString(newEmail, VALID_EMAIL_ADDRESS_REGEX)) {
                 log.warn("Email field " + newEmail + " failed regex validation");
-                return null;
+                return Optional.empty();
                 //return Mono.error(GenericException.throwException(USER, INVALID_EMAIL_EXCEPTION, "Email format is invalid"));
             }
             log.info("Email to be updated");
             map.put("email", newEmail);
 
         // check if password to be updated
-        }else if(newPassword != null && !newPassword.isEmpty()){
+        }if(newPassword != null && !newPassword.isEmpty()){
             log.info("Password to be updated");
             map.put("password", newPassword);
-        }else{
-            log.info("No fields to update");
-            return null;
-            //return Mono.empty();
         }
 
-        return map;
+        return Optional.of(map);
     }
 
-
     //@PreAuthorize("hasRole('ADMIN')")
-    /*
-    public Mono<User> getAllUsers(){
+    public Flux<User> getAllUsers(){
         log.info("AuthenticationService::getAllUsers");
 
         return userRepository.findAll().map( p -> {
-            User user = new User(p.getUsername(), p.getEmail(), p.getPassword());
+            User user = new User(p.getName(), p.getEmail(), p.getPassword(), p.getCryptoSalt());
+            user.setId(p.getId());
+            user.setUserState(p.getUserState());
             return user;
         });
 
     }
 
     //@PreAuthorize("hasRole('ADMIN')")
-    public Mono<Void> deleteUser(UserData userData){
-        return userRepository.deleteByEmail(userData.getEmail());
+    public Mono<Void> deleteUser(Integer id){
+        return userRepository.deleteById(id);
     }
-    */
 
-    /*
-    //PreAuthorize('hasRole('ADMIN')')
-    public Mono<Void> changeUserStatus(UserStatus userStatus){
-        return ...;
-    }
-     */
 }

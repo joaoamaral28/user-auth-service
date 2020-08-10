@@ -60,6 +60,10 @@ public class User {
         return this.userState;
     }
 
+    public void setId(Integer id){
+        this.id = id;
+    }
+
     public void setName(String name){
         this.name = name;
     }
@@ -74,6 +78,10 @@ public class User {
 
     public void setSalt(byte[] salt){
         this.cryptoSalt = salt;
+    }
+
+    public void setUserState(UserState userState){
+        this.userState = userState;
     }
 
     public String toStringSimple(){
