@@ -5,7 +5,7 @@ import org.springframework.beans.factory.annotation.Value;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.SignatureAlgorithm;
-import org.springframework.security.core.userdetails.UserDetails;
+//import org.springframework.security.core.userdetails.UserDetails;
 
 import java.io.Serializable;
 import java.util.Date;
@@ -15,7 +15,7 @@ import java.util.function.Function;
 
 public class AuthenticationToken implements Serializable{
 
-    public static final long TOKEN_VALIDITY = 5 * 60 * 60;
+    public static final long TOKEN_VALIDITY = 2 * 60 * 60 * 1000; // 2 hours
 
     @Value("${jwt.secret}")
     private String secret;
@@ -27,7 +27,7 @@ public class AuthenticationToken implements Serializable{
 
     private String generateAuthenticationToken(Map<String, Object> claims, String subject){
         return Jwts.builder().setClaims(claims).setSubject(subject).setIssuedAt(new Date(System.currentTimeMillis()))
-                .setExpiration(new Date(System.currentTimeMillis() + TOKEN_VALIDITY * 1000))
+                .setExpiration(new Date(System.currentTimeMillis() + TOKEN_VALIDITY))
                 .signWith(SignatureAlgorithm.HS512, secret).compact();
     }
 
@@ -52,10 +52,10 @@ public class AuthenticationToken implements Serializable{
         final Date expiration = getExpirationDateFromToken(token);
         return expiration.before(new Date());
     }
-
+/*
     public boolean validateToken(String token, UserDetails userDetails){
         final String username = getUsernameFromToken(token);
         return (username.equals(userDetails.getUsername()) && !isTokenExpired(token));
     }
-
+*/
 }

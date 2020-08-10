@@ -3,14 +3,19 @@ package com.service.authentication_server.handler;
 import com.service.authentication_server.model.User;
 import com.service.authentication_server.model.UserData;
 import com.service.authentication_server.service.AuthenticationService;
-import org.json.JSONObject;
+import lombok.extern.log4j.Log4j2;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.server.ServerRequest;
 import org.springframework.web.reactive.function.server.ServerResponse;
+import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
+import static org.springframework.web.reactive.function.BodyInserters.fromObject;
+import static org.springframework.web.reactive.function.BodyInserters.fromValue;
+
+@Log4j2
 @Component
 public class AuthenticationHandler {
 
@@ -18,34 +23,48 @@ public class AuthenticationHandler {
     private AuthenticationService authenticationService;
 
     public Mono<ServerResponse> authenticateUser(ServerRequest serverRequest){
-        System.out.println("Handler::authenticateUser()");
+        log.info("Handler::authenticateUser");
 
-        System.out.println(serverRequest.bodyToMono(JSONObject.class).toProcessor().peek());
+        Mono<UserData> userData = serverRequest.bodyToMono(UserData.class);
 
-        //String email = serverRequest.pathVariable("email");
-        //String password = serverRequest.pathVariable("password");
-
-        UserData userData = new UserData();
-
-        Mono<User> authenticateUser = authenticationService.authenticateUser(userData);
-
-        return ServerResponse.ok()
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .body(authenticateUser, UserData.class);
+        return userData.flatMap( data -> ServerResponse
+                .ok()
+                .contentType(MediaType.APPLICATION_JSON)
+                .body(authenticationService.authenticateUser(data), User.class));
     }
 
     public Mono<ServerResponse> createUser(ServerRequest serverRequest){
-        System.out.println("createUser()");
-        Mono<UserData> decodedUserData = serverRequest.bodyToMono(UserData.class);
+        log.info("Handler::createUser");
 
-        Mono<User> user = authenticationService.createUser(null);
+        Mono<UserData> userData = serverRequest.bodyToMono(UserData.class);
 
-        return decodedUserData.flatMap( data ->
-                ServerResponse.ok()
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .body(user, UserData.class));
-
+        return userData.flatMap( data -> ServerResponse
+                .ok()
+                .contentType(MediaType.APPLICATION_JSON)
+                .body(authenticationService.createUser(data), User.class));
     }
 
+    public Mono<ServerResponse> updateUser(ServerRequest serverRequest){
+        log.info("Handler::deleteUser");
+        return authenticationService.updateUser(serverRequest.bodyToMono(UserData.class))
+                .flatMap( data -> ServerResponse
+                        .ok()
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .body(fromValue(data)))
+                .switchIfEmpty(ServerResponse.notFound().build());
+    }
+
+    public Mono<ServerResponse> getAllUsers(ServerRequest serverRequest){
+        log.info("Handler::getAllUsers");
+        // TODO
+        return Mono.empty();
+    }
+
+    public Mono<ServerResponse> deleteUser(ServerRequest serverRequest){
+        log.info("Handler::deleteUser");
+        log.info("Query params: " + serverRequest.queryParams());
+        // TODO
+        return Mono.empty();
+    }
 
 }

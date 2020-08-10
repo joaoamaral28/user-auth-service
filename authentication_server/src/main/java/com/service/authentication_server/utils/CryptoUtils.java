@@ -1,6 +1,6 @@
 package com.service.authentication_server.utils;
 
-import com.service.authentication_server.exception.GenericException;
+import com.service.authentication_server.exception.GenericException.GenericException;
 import lombok.extern.log4j.Log4j2;
 
 import javax.crypto.SecretKeyFactory;
@@ -9,9 +9,10 @@ import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
 import java.security.spec.InvalidKeySpecException;
 import java.security.spec.KeySpec;
+import java.util.Arrays;
 
-import static com.service.authentication_server.exception.EntityType.PBKDF2_OP;
-import static com.service.authentication_server.exception.ExceptionType.INVALID_PARAMETER_EXCEPTION;
+import static com.service.authentication_server.exception.GenericException.GenericExceptionEntityType.PBKDF2_OP;
+import static com.service.authentication_server.exception.GenericException.GenericExceptionType.INVALID_PARAMETER_EXCEPTION;
 
 @Log4j2
 public class CryptoUtils {
@@ -42,6 +43,19 @@ public class CryptoUtils {
             throw GenericException.throwException(PBKDF2_OP, INVALID_PARAMETER_EXCEPTION, "Invalid hash parameter or key spec");
         }
         return hashResult;
+    }
+
+    public static boolean checkPasswordMatch(String providedPassword, byte[] storedPassword, byte[] storedSalt){
+
+        byte[] passwordHash = new byte[0];
+        // hash the password
+        try {
+            passwordHash = generatePBKDF2(providedPassword, storedSalt);
+        } catch (GenericException e) {
+            e.printStackTrace();
+        }
+
+        return Arrays.equals(storedPassword, passwordHash);
     }
 
     public static void generateJWT(){

@@ -1,6 +1,7 @@
-package com.service.authentication_server.configuration;
+package com.service.authentication_server.router;
 
 import com.service.authentication_server.handler.AuthenticationHandler;
+import org.json.JSONObject;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.MediaType;
@@ -21,7 +22,13 @@ public class AuthenticationRouter {
     @Bean
     public RouterFunction<ServerResponse> authenticationRoute(AuthenticationHandler authenticationHandler){
         return RouterFunctions
-/*
+                .route(POST("/user/login").and(accept(MediaType.APPLICATION_JSON)), authenticationHandler::authenticateUser)
+                .andRoute(POST("user/register").and(accept(MediaType.APPLICATION_JSON)), authenticationHandler::createUser)
+                .andRoute(GET("/user/getAll"), authenticationHandler::getAllUsers)
+                .andRoute(DELETE("/user/delete").and(accept(MediaType.APPLICATION_JSON)), authenticationHandler::deleteUser)
+                .andRoute(PUT("/user/update").and(accept(MediaType.APPLICATION_JSON)), authenticationHandler::updateUser);
+
+        /*
                 .route()
                 .nest(path("/user"), bc -> bc
                         .POST("/login", authenticationHandler::authenticateUser)
@@ -34,9 +41,8 @@ public class AuthenticationRouter {
                             System.out.printf("Response={%s} sent.\n", response.toString());
                             return response;
                         })).build();
-*/
-                .route(POST("/user/login").and(accept(MediaType.APPLICATION_JSON)), authenticationHandler::authenticateUser)
-                .andRoute(POST("user/register").and(accept(MediaType.APPLICATION_JSON)), authenticationHandler::createUser);
+        */
+
     }
 
 }

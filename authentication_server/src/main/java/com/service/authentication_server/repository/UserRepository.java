@@ -11,4 +11,9 @@ public interface UserRepository extends ReactiveCassandraRepository<User, Intege
 
     Mono<User> getUserByEmail(String email);
 
+    Mono<Void> deleteByEmail(String email);
+
+    Mono<Boolean> existsByEmail(String email);
+
 }
+

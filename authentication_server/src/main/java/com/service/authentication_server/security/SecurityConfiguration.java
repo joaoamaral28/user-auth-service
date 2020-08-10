@@ -1,5 +1,5 @@
 package com.service.authentication_server.security;
-
+/*
 import org.springframework.context.annotation.Bean;
 import org.springframework.security.config.annotation.method.configuration.EnableReactiveMethodSecurity;
 import org.springframework.security.config.annotation.web.reactive.EnableWebFluxSecurity;
@@ -11,6 +11,7 @@ import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.web.server.SecurityWebFilterChain;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
+
 @EnableWebFluxSecurity
 @EnableReactiveMethodSecurity
 public class SecurityConfiguration{
@@ -19,16 +20,25 @@ public class SecurityConfiguration{
     public SecurityWebFilterChain securityFilterChain(ServerHttpSecurity http) {
         http.authorizeExchange().anyExchange().permitAll();
         http.csrf().disable();
+        http.cors().disable();
         return http.build();
     }
 
-
     @Bean
     public SecurityWebFilterChain securitygWebFilterChain(ServerHttpSecurity http) {
+        http.csrf().disable();
+        http.cors().disable();
+        return http.authorizeExchange().anyExchange().permitAll().and().build();
+    }
+
+/*
+    @Bean
+    public SecurityWebFilterChain securitygWebFilterChain(ServerHttpSecurity http) {
+        http.csrf().disable();
         return http.authorizeExchange()
                  .anyExchange().authenticated()
                 .and().build();
-        /*
+
         return http.authorizeExchange()
                 .pathMatchers("/","/admin")
                 .hasAuthority("ROLE_ADMIN")
@@ -42,7 +52,7 @@ public class SecurityConfiguration{
                 .disable()
                 .build();
 
-         */
+
     }
 
     @Bean
@@ -68,3 +78,5 @@ public class SecurityConfiguration{
     }
 
 }
+*/
+
