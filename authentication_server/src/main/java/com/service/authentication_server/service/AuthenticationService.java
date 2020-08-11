@@ -32,7 +32,7 @@ public class AuthenticationService {
     @Autowired
     private UserRepository userRepository;
 
-    public Mono<User> authenticateUser(UserData userData){
+    public Mono<String> authenticateUser(UserData userData){
         log.info("AuthenticationService::authenticateUser");
 
         String email = userData.getEmail();
@@ -42,69 +42,68 @@ public class AuthenticationService {
         if(!regexValidateString(email,VALID_EMAIL_ADDRESS_REGEX)){
             log.info("Provided email <" + email + "> composition is invalid");
             return Mono.error(GenericException.throwException(USER,INVALID_EMAIL_EXCEPTION,"Email format is invalid"));
-            //throw new GenericException("User data is invalid. Regex validation failed!");
         }
 
-        Mono<User> storedUser = userRepository.getUserByEmail(email);
+        //Mono<User> storedUser = userRepository.getUserByEmail(email);
         // proceed once IO call finishes
-        storedUser.subscribeOn(Schedulers.elastic());
+        //storedUser.subscribeOn(Schedulers.elastic());
 
         // TODO return authentication JWT
-
-        return storedUser
-                // check if given password matches stored password
-                .filter(user ->
-                        checkPasswordMatch(password, user.getPassword(), user.getCryptoSalt()))
-                .switchIfEmpty(Mono.error(GenericException.throwException(USER,INVALID_PASSWORD_EXCEPTION,"Password is incorrect")))
-                // checks if account is active
-                .filter(user ->
-                        user.getUserState() == UserState.ACTIVE
-                ).switchIfEmpty(Mono.error(GenericException.throwException(USER,INVALID_ACCOUNT_STATE_EXCEPTION,"Account is not active")))
-                .doOnSuccess(value -> log.info("Authentication OK for user: " + value.toStringSimple()));
-
+        return userRepository.getUserByEmail(email)
+                .map(user -> {
+                    if(!checkPasswordMatch(password, user.getPassword(), user.getCryptoSalt())){
+                        Mono.error(GenericException.throwException(USER,INVALID_PASSWORD_EXCEPTION,"Password is incorrect"));
+                    }
+                    else if(user.getUserState().equals(UserState.ACTIVE)){
+                        Mono.error(GenericException.throwException(USER,INVALID_ACCOUNT_STATE_EXCEPTION,"Account is not active"));
+                    }
+                    return "Authentication OK for user: " + user.toStringSimple();
+                }).log();
     }
 
-    public Mono<User> createUser(UserData userData){
+    public Mono<Object> createUser(Mono<UserData> userData){
         log.info("AuthenticationService::createUser");
 
-        String name = userData.getName();
-        String email = userData.getEmail();
-        String password = userData.getPassword();
+        return userData.flatMap(data -> {
 
-        /* Check for invalid email and name fields by matching to the corresponding
-         * regular expression. This validation is usually enforced by the client,
-         * however it is double checked here for resilience purposes. */
-        if(!regexValidateString(email,VALID_EMAIL_ADDRESS_REGEX)){
-            log.warn("Email field " + email + " failed regex validation");
-            return Mono.error(GenericException.throwException(USER,INVALID_EMAIL_EXCEPTION,"Email format is invalid"));
-        }
-        if(!regexValidateString(name,VALID_NAME_REGEX)){
-            log.warn("Name field " + name + " failed regex validation");
-            return Mono.error(GenericException.throwException(USER,INVALID_NAME_EXCEPTION,"Name format is invalid"));
-        }
+            String name = data.getName();
+            String email = data.getEmail();
+            String password = data.getPassword();
 
-        // check if there is no account already registered with given email address in database
-        //Mono<Boolean> existingUser = userRepository.existsByEmail(email);
-        //existingUser.subscribe();
-        userRepository.existsByEmail(email).map( value ->
-                value ? Mono.error(GenericException.throwException(USER,EXISTING_ACCOUNT_EXCEPTION,"An account with email " + email + " already exists")) : false);
+            /* Check for invalid email and name fields by matching to the corresponding
+             * regular expression. This validation is usually enforced by the client,
+             * however it is double checked here for resilience purposes. */
+            if(!regexValidateString(email,VALID_EMAIL_ADDRESS_REGEX)){
+                log.warn("Email field " + email + " failed regex validation");
+                return Mono.error(GenericException.throwException(USER,INVALID_EMAIL_EXCEPTION,"Email format is invalid"));
+            }
+            if(!regexValidateString(name,VALID_NAME_REGEX)){
+                log.warn("Name field " + name + " failed regex validation");
+                return Mono.error(GenericException.throwException(USER,INVALID_NAME_EXCEPTION,"Name format is invalid"));
+            }
 
-        // Start the password hashing process necessary for its secure storage in the database
-        byte[] salt = generateSalt();
-        byte[] passwordHash;
-        try {
-            passwordHash = generatePBKDF2(password, salt);
-        } catch (GenericException e) {
-            if(log.isDebugEnabled())
-                e.printStackTrace();
-            return Mono.error(e);
-        }
+            return userRepository.existsByEmail(email)
+                .flatMap( exists -> {
+                    if (exists) {
+                        System.out.println("User already exists in database");
+                        return Mono.error(GenericException.throwException(USER, EXISTING_ACCOUNT_EXCEPTION, "An account with email " + email + " already exists"));
+                    } else {
+                        // Start the password hashing process necessary for its secure storage in the database
+                        byte[] salt = generateSalt();
+                        byte[] passwordHash;
+                        try {
+                            passwordHash = generatePBKDF2(password, salt);
+                        } catch (GenericException e) {
+                            if (log.isDebugEnabled())
+                                e.printStackTrace();
+                            return Mono.error(e);
+                        }
+                        User user = new User(name, email, passwordHash, salt);
+                        return userRepository.save(user);
+                    }
+                }).doOnError(e -> log.info(e.getMessage())).log();
+            });
 
-        User user = new User(name, email, passwordHash, salt);
-
-        return userRepository.save(user)
-                .doOnSuccess(value -> log.info("Added new user: " + value.toStringSimple()))
-                .switchIfEmpty(Mono.error(GenericException.throwException(REPOSITORY, REPOSITORY_STORE_EXCEPTION,  "Failed while storing newly created user into database")));
     }
 
     public Mono<Object> updateUser(Mono<UserData> userData){
@@ -112,34 +111,31 @@ public class AuthenticationService {
 
         // TODO error handling
         return userData.flatMap( data -> {
-            System.out.println(data);
+            //System.out.println(data);
             return userRepository.findById(data.getId())
-                    .flatMap( user1 -> {
-                        System.out.println(user1);
-                        Optional<Map<String, String>> optionalMap = validateAndCheckNewData(data);
-                        if(optionalMap.isEmpty()){
-                            return Mono.just("No fields to update");
-                        }else {
-                            Map<String,String> m = optionalMap.get();
-                            if (m.containsKey("email")) user1.setEmail(m.get("email"));
-                            if (m.containsKey("name")) user1.setName(m.get("name"));
-                            if (m.containsKey("password")) {
-                                byte[] passwordHash = new byte[0];
-                                try {
-                                    passwordHash = generatePBKDF2(m.get("password"), user1.getCryptoSalt());
-                                } catch (GenericException e) {
-                                    if (log.isDebugEnabled())
-                                        e.printStackTrace();
-                                    return Mono.error(e);
-                                }
-                                user1.setPassword(passwordHash);
+                .flatMap( user1 -> {
+                    //System.out.println(user1);
+                    Optional<Map<String, String>> optionalMap = validateAndCheckNewData(data);
+                    if(optionalMap.isEmpty()){
+                        return Mono.just("No fields to update");
+                    }else {
+                        Map<String,String> newDataMap = optionalMap.get();
+                        if (newDataMap.containsKey("email")) user1.setEmail(newDataMap.get("email"));
+                        if (newDataMap.containsKey("name")) user1.setName(newDataMap.get("name"));
+                        if (newDataMap.containsKey("password")) {
+                            byte[] passwordHash;
+                            try {
+                                passwordHash = generatePBKDF2(newDataMap.get("password"), user1.getCryptoSalt());
+                            } catch (GenericException e) {
+                                if (log.isDebugEnabled())
+                                    e.printStackTrace();
+                                return Mono.error(e);
                             }
-                            return userRepository.save(user1);
+                            user1.setPassword(passwordHash);
                         }
-                    }).map(updatedUser -> {
-                        System.out.println(updatedUser.toString());
-                        return updatedUser.toString();
-                    });
+                        return userRepository.save(user1);
+                    }
+                }).map(Object::toString).log();
         });
     }
 
@@ -167,7 +163,7 @@ public class AuthenticationService {
             // check if email is an appropriate string
             if (!regexValidateString(newEmail, VALID_EMAIL_ADDRESS_REGEX)) {
                 log.warn("Email field " + newEmail + " failed regex validation");
-                return Optional.empty();
+                return Optional.empty(); // TODO error handling
                 //return Mono.error(GenericException.throwException(USER, INVALID_EMAIL_EXCEPTION, "Email format is invalid"));
             }
             log.info("Email to be updated");

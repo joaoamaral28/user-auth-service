@@ -41,10 +41,15 @@ public class AuthenticationHandler {
 
         Mono<UserData> userData = serverRequest.bodyToMono(UserData.class);
 
+        return ServerResponse.ok().contentType(MediaType.APPLICATION_JSON)
+                .body(authenticationService.createUser(userData), Object.class);
+        /*
         return userData.flatMap( data -> ServerResponse
                 .ok()
                 .contentType(MediaType.APPLICATION_JSON)
-                .body(authenticationService.createUser(data), User.class));
+                .body(authenticationService.createUser(userData), Object.class));
+
+         */
     }
 
     public Mono<ServerResponse> updateUser(ServerRequest serverRequest){
